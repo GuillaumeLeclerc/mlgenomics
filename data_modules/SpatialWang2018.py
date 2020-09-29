@@ -34,11 +34,11 @@ class SpatialWang2018DataModule(pl.LightningDataModule):
         coordinates = ch.from_numpy(content[:, -3:]).float()
 
         if self.normalize_coords:
-            mins = coordinates.min(0)[0]
-            maxs = coordinates.max(0)[0]
+            mean = coordinates.mean(0)
+            maxs = coordinates.max()
 
-            coordinates -= mins[None, :]
-            coordinates /= maxs[None, :] - mins[None, :]
+            coordinates -= mean[None, :]
+            coordinates /= coordinates.abs().max()
 
         full_dataset = TensorDataset(data, coordinates)
 
@@ -79,7 +79,29 @@ class SpatialWang2018DataModule(pl.LightningDataModule):
         return DataLoader(self.test_dataset, batch_size=self.batch_size,
                           pin_memory=True, shuffle=False)
 
+    def compute_baseline(self, mode='chance', samples=100, loss=ch.nn.functional.mse_loss):
+        l = DataLoader(self.test_dataset, batch_size=len(self.test_dataset))
+        test_coords = next(iter(l))[1]
+        l = DataLoader(self.train_dataset, batch_size=len(self.train_dataset))
+        train_coords = next(iter(l))[1]
+
+        results = []
+        for _ in range(samples):
+            if mode == 'chance':
+                random_indices = ch.randint(0, train_coords.shape[0],
+                                            (test_coords.shape[0],))
+                prediction = ch.index_select(train_coords, 0, random_indices)
+            elif mode == 'center':
+                prediction = test_coords*0 + train_coords.mean(0)[None, :]
+            error = loss(prediction, test_coords)
+            results.append(error.item())
+
+        return np.mean(results)
 
 
-y = SpatialWang2018DataModule()
-y.setup()
+if __name__ == '__main__':
+    y = SpatialWang2018DataModule()
+    y.setup()
+    print("Chance baseline:", y.compute_baseline(mode='chance'))
+    print("Center baseline:", y.compute_baseline(mode='center'))
+
