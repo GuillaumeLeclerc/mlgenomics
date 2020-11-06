@@ -21,8 +21,8 @@ class SimpleFNN(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         print(self.hparams)
-        size = 2048
-        num_layers = 10
+        size = 128
+        num_layers = 5
         layers = []
         layers.append(torch.nn.Linear(28, size))
         layers.append(torch.nn.BatchNorm1d(size, affine=False))
@@ -37,20 +37,32 @@ class SimpleFNN(pl.LightningModule):
         self.layers = torch.nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)
-        return self.layers(x)
+        q = x.view(x.size(0), -1)
+        q = self.layers(q)
+        return q
+
+    def compute_matrix(self, x):
+        x = x[:, None, :] - x[None, :, :]
+        x = (x ** 2).mean(2)
         return x
+
+    def compute_loss(self, x, y, y_hat):
+        true_matrix = self.compute_matrix(y)
+        pred_matrix = self.compute_matrix(y_hat)
+        loss = (true_matrix - pred_matrix).abs().mean()
+        return loss
 
     def configure_optimizers(self):
         print(self.hparams)
-        optimizer = torch.optim.SGD(self.parameters(), lr=(self.hparams.lr), momentum=0.9)
+        optimizer = torch.optim.Adam(self.parameters(), lr=(self.hparams.lr),
+                                     weight_decay=1e-2)
         scheduler = StepLR(optimizer, 100, gamma=0.1)
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = F.mse_loss(y_hat, y)
+        loss = self.compute_loss(x, y, y_hat)
         result = pl.TrainResult(loss)
         result.log('train_loss', loss)
         return result
@@ -58,18 +70,15 @@ class SimpleFNN(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = F.mse_loss(y_hat, y)
+        loss = self.compute_loss(x, y, y_hat)
         result = pl.EvalResult(checkpoint_on=loss)
         result.log('val_loss', loss)
-        result.log('val_x_errors', F.mse_loss(y_hat[:, 0], y[:, 0]))
-        result.log('val_y_errors', F.mse_loss(y_hat[:, 1], y[:, 1]))
-        result.log('val_z_errors', F.mse_loss(y_hat[:, 2], y[:, 2]))
         return result
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = F.mse_loss(y_hat, y)
+        loss = self.compute_loss(x, y, y_hat)
         result = pl.EvalResult()
         result.log('test_loss', loss)
         return result

@@ -1,28 +1,27 @@
 import pytorch_lightning as pl
 from argparse import ArgumentParser
-from uuid import uuid4
 from pytorch_lightning.callbacks import GpuUsageLogger, LearningRateMonitor
 
-from mlgenomics.data_modules.SpatialWang2018 import SpatialWang2018DataModule
-from mlgenomics.models.MatrixFNN import SimpleFNN
+from mlgenomics.data_modules.SpatialWang2018 import PairWiseSpatialWang2018DataModule
+from mlgenomics.models.PairwiseSimpleFNN import PairwiseSimpleFNN
 
 parser = ArgumentParser()
-parser = SimpleFNN.add_model_specific_args(parser)
+parser = PairwiseSimpleFNN.add_model_specific_args(parser)
 
 args = parser.parse_args()
 
-dm = SpatialWang2018DataModule(normalize_coords=False)
+dm = PairWiseSpatialWang2018DataModule(normalize_coords=False)
 dm.setup()
 
 
 # init data
-model = SimpleFNN(**vars(args))
+model = PairwiseSimpleFNN(**vars(args))
 
 
 lr_monitor = LearningRateMonitor(logging_interval='step')
 
 trainer = pl.Trainer(
-    val_check_interval=0.1,
+    val_check_interval=1.0,
     gpus=1,
     callbacks=[lr_monitor]
 )
@@ -30,4 +29,3 @@ trainer = pl.Trainer(
 trainer.fit(model, datamodule=dm)
 
 trainer.test(datamodule=dm)
-trainer.save_checkpoint(f"./{uuid4()}.ckpt")

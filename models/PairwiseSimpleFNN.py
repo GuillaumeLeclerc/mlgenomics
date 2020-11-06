@@ -9,7 +9,29 @@ from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from torch.utils.data import random_split
 
-class SimpleFNN(pl.LightningModule):
+class Transformer(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        size = 512
+        num_layers = 4
+        layers = []
+        layers.append(torch.nn.Linear(28, size))
+        layers.append(torch.nn.BatchNorm1d(size, affine=False))
+
+        for _ in range(num_layers - 1):
+            layers.append(torch.nn.ReLU(inplace=True))
+            layers.append(torch.nn.Linear(size, size))
+            layers.append(torch.nn.BatchNorm1d(size, affine=False))
+
+        layers.append(torch.nn.Linear(size, 10))
+
+        self.layers = torch.nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x)
+
+class PairwiseSimpleFNN(pl.LightningModule):
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -21,10 +43,13 @@ class SimpleFNN(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         print(self.hparams)
-        size = 2048
-        num_layers = 10
+
+        self.transformer = Transformer()
+        
         layers = []
-        layers.append(torch.nn.Linear(28, size))
+        size = 128
+        num_layers = 3
+        layers.append(torch.nn.Linear(10, size))
         layers.append(torch.nn.BatchNorm1d(size, affine=False))
 
         for _ in range(num_layers - 1):
@@ -32,38 +57,43 @@ class SimpleFNN(pl.LightningModule):
             layers.append(torch.nn.Linear(size, size))
             layers.append(torch.nn.BatchNorm1d(size, affine=False))
 
-        layers.append(torch.nn.Linear(size, 3))
+        layers.append(torch.nn.Linear(size, 1))
 
         self.layers = torch.nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)
-        return self.layers(x)
+        a = self.transformer(x[:, 0, :])
+        b = self.transformer(x[:, 1, :])
+
+        x = torch.abs(a - b)
+        x = self.layers(x)
         return x
+
 
     def configure_optimizers(self):
         print(self.hparams)
-        optimizer = torch.optim.SGD(self.parameters(), lr=(self.hparams.lr), momentum=0.9)
+        optimizer = torch.optim.Adam(self.parameters(), lr=(self.hparams.lr))
         scheduler = StepLR(optimizer, 100, gamma=0.1)
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x)
-        loss = F.mse_loss(y_hat, y)
+        y = y > 0
+        y_hat = self(x).view(-1)
+        loss = F.binary_cross_entropy_with_logits(y_hat, y.float())
         result = pl.TrainResult(loss)
         result.log('train_loss', loss)
+        result.log('train_acc', ((y_hat > 0) == y).float().mean())
         return result
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x)
-        loss = F.mse_loss(y_hat, y)
-        result = pl.EvalResult(checkpoint_on=loss)
+        y = y > 0
+        y_hat = self(x).view(-1)
+        loss = F.binary_cross_entropy_with_logits(y_hat, y.float())
+        result = pl.EvalResult(loss)
         result.log('val_loss', loss)
-        result.log('val_x_errors', F.mse_loss(y_hat[:, 0], y[:, 0]))
-        result.log('val_y_errors', F.mse_loss(y_hat[:, 1], y[:, 1]))
-        result.log('val_z_errors', F.mse_loss(y_hat[:, 2], y[:, 2]))
+        result.log('val_acc', ((y_hat > 0) == y).float().mean())
         return result
 
     def test_step(self, batch, batch_idx):
