@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from argparse import ArgumentParser
 from uuid import uuid4
-from pytorch_lightning.callbacks import GpuUsageLogger, LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor
 
 from mlgenomics.data_modules.SpatialWang2018 import SpatialWang2018DataModule
 from mlgenomics.models.MatrixFNN import SimpleFNN
@@ -23,7 +23,7 @@ lr_monitor = LearningRateMonitor(logging_interval='step')
 
 trainer = pl.Trainer(
     val_check_interval=0.1,
-    gpus=1,
+    
     callbacks=[lr_monitor]
 )
 
