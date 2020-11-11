@@ -1,3 +1,5 @@
+# updated Nov 10, 2020
+
 # load libraries
 
 from __future__ import print_function
@@ -22,7 +24,7 @@ import pandas as pd
 
 # define functions
 
-# function from here: https://github.com/weallen/STARmap/blob/master/python/analysis.py
+# function modified from here: https://github.com/weallen/STARmap/blob/master/python/analysis.py
 def load_data(data_dir, prefix="Cell"):
         #expr = pd.read_csv(os.path.join(data_dir, "data_table.csv"), index_col=0)
     expr = pd.read_csv(os.path.join(data_dir, "cell_barcode_count.csv"), header=None)
@@ -32,7 +34,7 @@ def load_data(data_dir, prefix="Cell"):
     names.name = "Gene"
     return pd.DataFrame(data=expr.values, columns=names, index=rownames)
 
-# function from https://github.com/weallen/STARmap/blob/master/python/viz.py
+# function modified from https://github.com/weallen/STARmap/blob/master/python/viz.py
 def GetQHulls(labels):
     labels += 1
     Nlabels = labels.max()
@@ -57,8 +59,9 @@ def GetQHulls(labels):
 def normalize(counts):
 
     cts = np.array(counts)
-    #cts = cts[np.array(np.where(np.sum(cts, axis = 1)!=0)).flatten(),:] # remove cells, where total library count is zero
-    cell_median = np.median(cts, axis = 1) # get row-wise median
+    #index = np.array(np.where(np.sum(cts, axis = 1)!=0)).flatten()
+    #cts = cts[index,:] # remove cells, where total library count is zero
+    cts = cts + 0.001
     cell_sum = np.sum(cts, axis = 1) # get row-wise sum
     counts_out = cts/(np.tile(cell_sum, (cts.shape[1],1)).transpose()) # divide each column by row-wise sum
 
@@ -79,11 +82,11 @@ def process_2D(data_dir, gene_names,i):
     # get coords
     qhulls,coords = GetQHulls(image)# get all coordinates corresponding to single cell
     all_centroids  = np.vstack([np.append(c.mean(0),(0,i)) for c in coords]) # centroids are the average coordinates
-    counts_and_coords = np.concatenate((normalized_counts, all_centroids.astype('int')[range(normalized_counts.shape[0]),:]), axis = 1) # concat counts and coords
-
+    all_centroids_normalized = all_centroids/abs(all_centroids).max()
+    all_centroids_normalized[:,-1]=i
+    #counts_and_coords = np.concatenate((normalized_counts, all_centroids.astype('int')[range(normalized_counts.shape[0]),:]), axis = 1) # concat counts and coords
+    counts_and_coords = np.concatenate((normalized_counts, all_centroids_normalized), axis = 1) # concat counts and coords
     return counts_and_coords
-
-#def process_3D()
 
 #  get union of all gene names (across 3D and 2D datasets)
 genenames_3D = pd.read_csv('/Users/work/Documents/GitHub/mlgenomics/data_as_downloaded/sequentially_encoded_Wang_et_al_2018/gene_names.csv', header = 0)
@@ -91,26 +94,38 @@ genenames_3D = pd.read_csv('/Users/work/Documents/GitHub/mlgenomics/data_as_down
 dirs = os.listdir('/Users/work/Documents/GitHub/mlgenomics/data_as_downloaded/combinatorially_encoded/all_datasets')
 
 ct = []
-
 for i in range(len(dirs)):
 
     data_dir1 = os.path.join('/Users/work/Documents/GitHub/mlgenomics/data_as_downloaded/combinatorially_encoded/all_datasets',dirs[i])
-
     ct.append(load_data(data_dir1, prefix=""))
 
 genenames = []
 for i in range(len(dirs)):
     genenames.append(ct[i].columns)
-
 all_genes = np.unique(np.concatenate((np.unique(np.concatenate(genenames)),(np.array(genenames_3D).flatten()))))
 
 # process and append all the 2D datasets to one another
 
 data_out = []
-
 for i in range(len(dirs)):
     data_dir = os.path.join('/Users/work/Documents/GitHub/mlgenomics/data_as_downloaded/combinatorially_encoded/all_datasets',dirs[i])
     data_out.append(process_2D(data_dir, all_genes,i))
 
+# process the 3D datasets 
+
+counts_3d = loadmat('/Users/work/Documents/GitHub/mlgenomics/data_as_downloaded/sequentially_encoded_Wang_et_al_2018/20180123_BS10_light.mat')
+counts_3d_normalized = normalize(counts_3d['expr'])
+counts_3d_normalized = pd.DataFrame(counts_3d_normalized)
+counts_3d_normalized.columns =  np.array(genenames_3D[['gene']]).flatten()
+reindexed_3d = counts_3d_normalized.reindex(columns = (all_genes))
+reindexed_3d = np.array(reindexed_3d.fillna(0))
+coordinates_3d = np.matrix(counts_3d['goodLocs'])
+coordinates_3d_normalized = coordinates_3d/abs(coordinates_3d).max()
+complete_3d = np.concatenate((reindexed_3d, coordinates_3d_normalized), axis = 1)
+complete_3d = np.concatenate((complete_3d,np.repeat(33, complete_3d.shape[0]).reshape(complete_3d.shape[0],1)),axis=1)
+
+# concatenate all data
+all_data = np.concatenate((np.concatenate(data_out), complete_3d))
+
 # save data out
-np.save('Wang_2018_all_2D_processed_new.npy',data_out)
+np.savez('Wang_2018_all_2D_3D_processed.npz',all_data)

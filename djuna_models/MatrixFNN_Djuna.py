@@ -8,6 +8,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from torch.utils.data import random_split
+import numpy.ma as ma
 
 # modify the code to run on multiple independent inputs 
 # the 3D input, and all the 2D inputs, but then compute the loss 
@@ -29,33 +30,41 @@ class SimpleFNN(pl.LightningModule):
         size = 128
         num_layers = 5
         layers = []
-        layers.append(torch.nn.Linear(28, size)) # applies linear transformation to incomping data
+        layers.append(torch.nn.Linear(1030, size)) # applies linear transformation to incomping data
         layers.append(torch.nn.BatchNorm1d(size, affine=False)) # application of batch normalization
 
         for _ in range(num_layers - 1):
             layers.append(torch.nn.ReLU(inplace=True))
             layers.append(torch.nn.Linear(size, size))
             layers.append(torch.nn.BatchNorm1d(size, affine=False))
-
+            
         layers.append(torch.nn.Linear(size, 3)) # we care about the last layer as the model's projection into n-d space
-
         self.layers = torch.nn.Sequential(*layers)
+  
 
     def forward(self, x): # accept tensor of input data and return tensor of output data
+        
         q = x.view(x.size(0), -1)
+       
         q = self.layers(q) # run the model on the data
+ 
         return q
 
-    def compute_matrix(self, x): # compute pairwise distances for input matrix 
+    def compute_matrix(self, x, ID): # compute pairwise distances for input matrix 
         x = x[:, None, :] - x[None, :, :]
         x = (x ** 2).mean(2)
-        # mask distances between datasets with zero
-        return x
 
-    def compute_loss(self, x, y, y_hat):
-        true_matrix = self.compute_matrix(y)
-        pred_matrix = self.compute_matrix(y_hat)
+        mask = ID[:, None] - ID[None, :]
+        mask[abs(mask)>0] = 1
+        
+        return x * (mask)
+
+    def compute_loss(self, x, y, y_hat, ID):
+        true_matrix = self.compute_matrix(y, ID)
+        pred_matrix = self.compute_matrix(y_hat, ID)
+
         loss = (true_matrix - pred_matrix).abs().mean() # compute average difference in pairwise distances between true and predicted --> this is the loss
+
         return loss
 
     def configure_optimizers(self):
@@ -66,22 +75,25 @@ class SimpleFNN(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx): # batch is the output of the dataloader
-        x, y = batch
-        y_hat = self(x) # get model output
-        loss = self.compute_loss(x, y, y_hat) # compute loss between actual and predicted
+        x, y, ID = batch 
+    
+        y_hat = self(x) # get model output (calls forward)
+
+        loss = self.compute_loss(x, y, y_hat, ID) # compute loss between actual and predicted
+
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
+        x, y, ID = batch
         y_hat = self(x) # compute output on validation set
-        loss = self.compute_loss(x, y, y_hat) # get loss 
+        loss = self.compute_loss(x, y, y_hat, ID) # get loss 
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)# log and return the loss
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.compute_loss(x, y, y_hat)
+        loss = self.compute_loss(x, y, y_hat, ID)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
