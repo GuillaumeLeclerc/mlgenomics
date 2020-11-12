@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from argparse import ArgumentParser
 from uuid import uuid4
-from pytorch_lightning.callbacks import GpuUsageLogger, LearningRateMonitor
+from pytorch_lightning.callbacks import r, LearningRateMonitor
 
 from mlgenomics.data_modules.SpatialWang2018 import SpatialWang2018DataModule
 from mlgenomics.models.MatrixFNN import SimpleFNN

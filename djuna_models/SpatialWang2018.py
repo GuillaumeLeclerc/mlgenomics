@@ -7,7 +7,7 @@ from torch.utils.data import random_split, DataLoader, TensorDataset, Dataset
 import scipy.stats as stats
 
 
-DEFAULT_PATH = '../datasets/sequentially_encoded_spatial_wang_science_2018.npz'
+DEFAULT_PATH = '../datasets/sequentially_encoded_spatial_wang_science_2018_new.npz'
 DEFAULT_PATH = path.join(path.dirname(path.realpath(__file__)), DEFAULT_PATH)
 
 TEST_CELLS = 3000

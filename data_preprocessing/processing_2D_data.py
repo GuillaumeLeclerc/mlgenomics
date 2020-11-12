@@ -122,7 +122,7 @@ reindexed_3d = np.array(reindexed_3d.fillna(0))
 coordinates_3d = np.matrix(counts_3d['goodLocs'])
 coordinates_3d_normalized = coordinates_3d/abs(coordinates_3d).max()
 complete_3d = np.concatenate((reindexed_3d, coordinates_3d_normalized), axis = 1)
-complete_3d = np.concatenate((complete_3d,np.repeat(33, complete_3d.shape[0]).reshape(complete_3d.shape[0],1)),axis=1)
+complete_3d = np.concatenate((complete_3d,np.repeat(10, complete_3d.shape[0]).reshape(complete_3d.shape[0],1)),axis=1)
 
 # concatenate all data
 all_data = np.concatenate((np.concatenate(data_out), complete_3d))

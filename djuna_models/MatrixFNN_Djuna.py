@@ -39,16 +39,22 @@ class SimpleFNN(pl.LightningModule):
             layers.append(torch.nn.BatchNorm1d(size, affine=False))
             
         layers.append(torch.nn.Linear(size, 3)) # we care about the last layer as the model's projection into n-d space
+      
+        # add a final layer that implements data-specific scaling factor
         self.layers = torch.nn.Sequential(*layers)
-  
 
-    def forward(self, x): # accept tensor of input data and return tensor of output data
+        self.register_parameter('scale_weights',torch.nn.Parameter(torch.ones(11)))  # initiate empty torch
+        
+
+    def forward(self, x, ID): # accept tensor of input data and return tensor of output data
         
         q = x.view(x.size(0), -1)
        
         q = self.layers(q) # run the model on the data
- 
-        return q
+
+        # multiply each col in q by this
+        indexed_weights = torch.index_select(self.scale_weights, 0, ID.long())
+        return indexed_weights[:,None]*q
 
     def compute_matrix(self, x, ID): # compute pairwise distances for input matrix 
         x = x[:, None, :] - x[None, :, :]
@@ -77,7 +83,7 @@ class SimpleFNN(pl.LightningModule):
     def training_step(self, batch, batch_idx): # batch is the output of the dataloader
         x, y, ID = batch 
     
-        y_hat = self(x) # get model output (calls forward)
+        y_hat = self(x, ID) # get model output (calls forward)
 
         loss = self.compute_loss(x, y, y_hat, ID) # compute loss between actual and predicted
 
@@ -86,14 +92,14 @@ class SimpleFNN(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y, ID = batch
-        y_hat = self(x) # compute output on validation set
+        y_hat = self(x, ID) # compute output on validation set
         loss = self.compute_loss(x, y, y_hat, ID) # get loss 
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)# log and return the loss
+        self.log('validation_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)# log and return the loss
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x)
+        y_hat = self(x, ID)
         loss = self.compute_loss(x, y, y_hat, ID)
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
