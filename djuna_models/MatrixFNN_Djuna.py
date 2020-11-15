@@ -98,7 +98,7 @@ class SimpleFNN(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        x, y, ID = batch
         y_hat = self(x, ID)
         loss = self.compute_loss(x, y, y_hat, ID)
         self.log('test_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)

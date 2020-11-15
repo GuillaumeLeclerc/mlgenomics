@@ -7,7 +7,7 @@ from torch.utils.data import random_split, DataLoader, TensorDataset, Dataset
 import scipy.stats as stats
 
 
-DEFAULT_PATH ='../data_preprocessing/Wang_2018_all_2D_3D_processed_new.npz'
+DEFAULT_PATH ='../data_preprocessing/Wang_2018_all_2D_3D_processed_new_0_1_leftout.npz'
 DEFAULT_PATH = path.join(path.dirname(path.realpath(__file__)), DEFAULT_PATH)
 
 TEST_CELLS = 3000
